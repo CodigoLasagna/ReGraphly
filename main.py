@@ -1,9 +1,50 @@
 import graphlib as gl
-import geo_cords
+import unicodedata
+#import geo_cords
 
 import pyglet
 from pyglet import shapes
-from pyglet import image
+#from pyglet import image
+
+import speech_recognition as sr
+
+def recognize_words():
+    recognizer = sr.Recognizer()
+    mic = sr.Microphone()
+
+    with mic as source:
+        print("Di la primera palabra:")
+        recognizer.adjust_for_ambient_noise(source)
+        audio = recognizer.listen(source)
+
+    try:
+        print("Reconociendo...")
+        palabra1 = recognizer.recognize_google(audio, language="es-MX")
+        print("Primera palabra reconocida:", palabra1)
+        return palabra1
+    except sr.UnknownValueError:
+        print("No se pudo reconocer la primera palabra.")
+        return None
+
+def get_stations():
+    palabra1 = None
+    palabra2 = None
+
+    # Reconocimiento de la primera palabra
+    while not palabra1:
+        palabra1 = recognize_words()
+        palabra1 = palabra1
+
+    # Reconocimiento de la segunda palabra
+    while not palabra2:
+        palabra2 = recognize_words()
+        palabra2 = palabra2
+
+    print("Palabras reconocidas:")
+    print("Primera palabra:", palabra1)
+    print("Segunda palabra:", palabra2)
+    return palabra1, palabra2
+
 
 
 
@@ -338,40 +379,7 @@ class graph_g:
                     n.fill_color_h = fill_color
         self.update()
 
-if __name__ == '__main__1':
-    seed = gl.random.randint(0, 1000000000)
-    seed = 20
-    gl.random.seed(seed)
-    print(seed)
-    graph = gl.graph()
-    graph.set_canvas_size(1000, 1000)
-    graph.set_structure_size(size=15)
-    graph.set_nodes_max_val(99)
-    graph.set_weights_max_val(20)
-    graph.prepare_random_nodes()
-    graph.build_random(full_connected=True, density=20)
-
-    gl.force_directed_layout_weight(graph, iterations=1000, k_repulsion=1200.0, k_attraction_base=0.005)
-    mst = kruskal_algorithm(graph)
-    path_to, distance_to = shortest_distance_to(graph, "A", "D")
-    print("distance: " + str(distance_to))
-
-    batch = pyglet.graphics.Batch()
-    nodes_list = []
-    window = main_window(width=1920, height=1080, resizable=True)
-    graph_g = graph_g(graph, batch)
-    graph_g.prepare()
-    window.graph_g = graph_g
-    #graph_g.update_weights(mst, '#BA5337', 2)
-    #graph_g.update_weights(graph.weights, '#00CFD5', 1, True)
-    graph_g.update_weights(path_to, '#90FF09', 3, False)
-    window.batch = batch
-    window.graph = graph
-
-    pyglet.app.run()
-
-
-def load_metro_line(graph : gl.graph, name : str):
+def load_metro_line(graph : gl.graph, name : str, stations_list):
     sep = 0
     with open(name, 'r') as file:
         lines = file.readlines()
@@ -381,9 +389,12 @@ def load_metro_line(graph : gl.graph, name : str):
                 break
             parts = line.strip().split("\"")
             tag = parts[1]
+            stations_list.append(tag)
             value = int(parts[0].replace("[", '').replace("]", ''))
-            x, y = map(int, parts[2][1:-1].replace("(", '').split(','))
-            graph.add_custom_node(tag, value, x*4, y*4)
+            x_str, y_str = parts[2][1:-1].strip("()").split(',')
+            x = int(x_str)
+            y = int(y_str)
+            graph.add_custom_node(tag, value, x*8-50, y*8-2000)
             sep += 1
         for line in lines:
             parts = line.strip().split("][")
@@ -391,11 +402,54 @@ def load_metro_line(graph : gl.graph, name : str):
             n2 = int(parts[1].replace("]", ''))
             graph.add_custom_connection(graph.nodes[n1], graph.nodes[n2])
 
+def apply_letters_mapping(input_str, letters_map):
+    input_str = input_str.lower()
+    input_str = ''.join((c for c in unicodedata.normalize('NFD', input_str) if unicodedata.category(c) != 'Mn'))
+    for letter, options in letters_map.items():
+        if options == "ch":
+            input_str = input_str.replace(options, letter)
+        else:
+            input_str = input_str.replace(options, letter * len(options))
+    return input_str
+
+def check_spelling(input_str, stations_list, letters_map):
+    normalized_input = apply_letters_mapping(input_str, letters_map)
+
+    for name in stations_list:
+        normalized_text = apply_letters_mapping(name, letters_map)
+        if normalized_input == normalized_text:
+            return name
+    return None
+
+
 if __name__ == '__main__':
+    letters_map = {
+        's': 'szc',
+        'z': 'szc',
+        'c': 'szc',
+        'x': 'chj',
+        'j': 'h'
+    }
     graph = gl.graph()
-    load_metro_line(graph, "maps/linea6.txt")
-    load_metro_line(graph, "maps/linea5.txt")
-    load_metro_line(graph, "maps/linea1.txt")
+    stations_list = []
+    load_metro_line(graph, "maps/linea6.txt", stations_list)
+    load_metro_line(graph, "maps/linea5.txt", stations_list)
+    load_metro_line(graph, "maps/linea1.txt", stations_list)
+    load_metro_line(graph, "maps/linea9.txt", stations_list)
+    load_metro_line(graph, "maps/lineaA.txt", stations_list)
+    load_metro_line(graph, "maps/lineaB.txt", stations_list)
+    load_metro_line(graph, "maps/linea4.txt", stations_list)
+    load_metro_line(graph, "maps/linea3.txt", stations_list)
+    load_metro_line(graph, "maps/linea7.txt", stations_list)
+    load_metro_line(graph, "maps/linea2.txt", stations_list)
+    load_metro_line(graph, "maps/linea8.txt", stations_list)
+    load_metro_line(graph, "maps/linea12.txt", stations_list)
+    print(stations_list)
+    estacion1, estacion2 = get_stations()
+
+    estacion1 = check_spelling(estacion1, stations_list, letters_map)
+    estacion2 = check_spelling(estacion2, stations_list, letters_map)
+
 
     window = main_window(width=800, height=800, resizable=True)
     batch = pyglet.graphics.Batch()
@@ -404,4 +458,10 @@ if __name__ == '__main__':
     window.graph_g = graph_g
     window.batch = batch
     window.graph = graph
+
+    dfs_route = dfs_algorithm_route(graph, estacion1, estacion2)
+    bfs_route = bfs_algorithm_route(graph, estacion1, estacion2)
+    graph_g.update_weights(dfs_route, '#90FF09', 4)
+    graph_g.update_weights(bfs_route, '#FB6B1D', 4)
+
     pyglet.app.run()
